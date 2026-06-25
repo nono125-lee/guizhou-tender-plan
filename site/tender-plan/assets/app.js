@@ -192,7 +192,7 @@ async function load() {
 
 $("#reset").addEventListener("click", () => {
   ["search", "region", "source", "planned-month", "fund-tag"].forEach((id) => { $(`#${id}`).value = ""; });
-  $("#date-range").value = "90";
+  $("#date-range").value = "all";
   render();
 });
 
