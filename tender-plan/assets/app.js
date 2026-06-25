@@ -72,13 +72,8 @@ function districtOf(item) {
   return locationParts(item).district || item.region || "未载明";
 }
 
-function isLongTerm(item) {
-  const planned = parseDate(item.planned_bid_time);
-  if (!planned) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const diffDays = Math.floor((planned - today) / 86400000);
-  return diffDays >= 90;
+function isUltraLongBond(item) {
+  return /超长期(?:特别)?国债|特别国债/.test(item.fund_source || "");
 }
 
 function populateFilters(items) {
@@ -134,7 +129,7 @@ function passFilters(item) {
   const passDate = dateRange === "all" || (published && published >= daysAgo(dateRange));
   const passPlanned = !plannedMonth || (item.planned_bid_time || "").startsWith(plannedMonth);
   const passButton = !button
-    || (button === "超长期" ? isLongTerm(item) : (item.fund_source_tags || []).includes(button));
+    || (button === "超长期" ? isUltraLongBond(item) : (item.fund_source_tags || []).includes(button));
   return (!query || haystack.includes(query))
     && (!prefecture || prefectureOf(item) === prefecture)
     && (!district || districtOf(item) === district)
@@ -149,7 +144,7 @@ function renderFundStrip() {
   state.items.forEach((item) => {
     (item.fund_source_tags || ["未载明"]).forEach((tag) => counts.set(tag, (counts.get(tag) || 0) + 1));
   });
-  counts.set("超长期", state.items.filter(isLongTerm).length);
+  counts.set("超长期", state.items.filter(isUltraLongBond).length);
   const strip = $("#fund-strip");
   strip.replaceChildren();
   const allTags = [...new Set([...FUND_TAG_ORDER, ...counts.keys()])];
