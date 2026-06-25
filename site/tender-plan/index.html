@@ -38,8 +38,12 @@
         <input id="search" type="search" placeholder="项目名、招标人、建设内容">
       </label>
       <label>
-        <span>区域</span>
-        <select id="region"><option value="">全部</option></select>
+        <span>地州市</span>
+        <select id="prefecture"><option value="">全部</option></select>
+      </label>
+      <label>
+        <span>区县</span>
+        <select id="district"><option value="">全部</option></select>
       </label>
       <label>
         <span>发布时间</span>
@@ -59,10 +63,6 @@
       <label>
         <span>预计招标月</span>
         <input id="planned-month" type="month">
-      </label>
-      <label>
-        <span>资金来源</span>
-        <select id="fund-tag"><option value="">全部</option></select>
       </label>
     </section>
 
@@ -94,7 +94,7 @@
           <div><dt>招标人</dt><dd class="buyer"></dd></div>
           <div><dt>代理机构</dt><dd class="agency"></dd></div>
           <div><dt>预计招标</dt><dd class="planned-time"></dd></div>
-          <div><dt>投资估算</dt><dd class="budget"></dd></div>
+          <div><dt>投资估算</dt><dd><span class="budget"></span><span class="planned-content"></span></dd></div>
           <div><dt>资金来源</dt><dd class="fund-source"></dd></div>
           <div><dt>建设地点</dt><dd class="location"></dd></div>
         </dl>

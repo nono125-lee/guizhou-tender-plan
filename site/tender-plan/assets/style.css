@@ -306,6 +306,14 @@ dd {
   color: var(--green);
 }
 
+.planned-content {
+  display: block;
+  margin-top: 5px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+}
+
 .content {
   margin: 16px 0 0;
   color: #2e3936;
