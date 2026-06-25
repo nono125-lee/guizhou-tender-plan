@@ -1,17 +1,30 @@
 const FUND_TAG_ORDER = [
+  "超长期",
   "政府投资",
   "财政资金",
   "上级补助",
-  "地方自筹",
+  "国有资金",
   "专项债",
+  "地方自筹",
   "企业自筹",
   "银行贷款",
   "社会资本",
-  "国有资金",
   "其他",
   "未载明"
 ];
-const state = { items: [], payload: null };
+const PREFECTURE_LABELS = {
+  "贵阳市": "贵阳",
+  "六盘水市": "六盘水",
+  "遵义市": "遵义",
+  "安顺市": "安顺",
+  "毕节市": "毕节",
+  "铜仁市": "铜仁",
+  "黔西南布依族苗族自治州": "黔西南",
+  "黔东南苗族侗族自治州": "黔东南",
+  "黔南布依族苗族自治州": "黔南",
+  "贵安新区": "贵安"
+};
+const state = { items: [], payload: null, activeButton: "" };
 const $ = (selector) => document.querySelector(selector);
 
 function valueOrBlank(value) {
@@ -43,11 +56,43 @@ function optionList(select, values) {
   if ([...select.options].some((option) => option.value === current)) select.value = current;
 }
 
+function locationParts(item) {
+  const parts = (item.project_location || "").split("-").map((part) => part.trim()).filter(Boolean);
+  if (parts.length >= 3 && parts[0] === "贵州省") return { prefectureRaw: parts[1], district: parts[2] };
+  if (parts.length >= 2) return { prefectureRaw: parts.at(-2), district: parts.at(-1) };
+  return { prefectureRaw: "", district: item.region || "" };
+}
+
+function prefectureOf(item) {
+  const raw = locationParts(item).prefectureRaw;
+  return PREFECTURE_LABELS[raw] || raw || "未载明";
+}
+
+function districtOf(item) {
+  return locationParts(item).district || item.region || "未载明";
+}
+
+function isLongTerm(item) {
+  const planned = parseDate(item.planned_bid_time);
+  if (!planned) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.floor((planned - today) / 86400000);
+  return diffDays >= 90;
+}
+
 function populateFilters(items) {
-  optionList($("#region"), [...new Set(items.map((item) => item.region))]);
+  optionList($("#prefecture"), [...new Set(items.map(prefectureOf))]);
+  updateDistrictOptions();
   optionList($("#source"), [...new Set(items.map((item) => item.source_name))]);
-  const tags = [...new Set(items.flatMap((item) => item.fund_source_tags || ["未载明"]))];
-  optionList($("#fund-tag"), tags);
+}
+
+function updateDistrictOptions() {
+  const prefecture = $("#prefecture").value;
+  const values = state.items
+    .filter((item) => !prefecture || prefectureOf(item) === prefecture)
+    .map(districtOf);
+  optionList($("#district"), [...new Set(values)]);
 }
 
 function updateStats(payload) {
@@ -69,11 +114,12 @@ function updateStats(payload) {
 
 function passFilters(item) {
   const query = $("#search").value.trim().toLowerCase();
-  const region = $("#region").value;
+  const prefecture = $("#prefecture").value;
+  const district = $("#district").value;
   const source = $("#source").value;
   const dateRange = $("#date-range").value;
   const plannedMonth = $("#planned-month").value;
-  const fundTag = $("#fund-tag").value;
+  const button = state.activeButton;
   const haystack = [
     item.title,
     item.project_name,
@@ -87,13 +133,15 @@ function passFilters(item) {
   const published = parseDate(item.published_at);
   const passDate = dateRange === "all" || (published && published >= daysAgo(dateRange));
   const passPlanned = !plannedMonth || (item.planned_bid_time || "").startsWith(plannedMonth);
-  const passFundTag = !fundTag || (item.fund_source_tags || []).includes(fundTag);
+  const passButton = !button
+    || (button === "超长期" ? isLongTerm(item) : (item.fund_source_tags || []).includes(button));
   return (!query || haystack.includes(query))
-    && (!region || item.region === region)
+    && (!prefecture || prefectureOf(item) === prefecture)
+    && (!district || districtOf(item) === district)
     && (!source || item.source_name === source)
     && passDate
     && passPlanned
-    && passFundTag;
+    && passButton;
 }
 
 function renderFundStrip() {
@@ -101,6 +149,7 @@ function renderFundStrip() {
   state.items.forEach((item) => {
     (item.fund_source_tags || ["未载明"]).forEach((tag) => counts.set(tag, (counts.get(tag) || 0) + 1));
   });
+  counts.set("超长期", state.items.filter(isLongTerm).length);
   const strip = $("#fund-strip");
   strip.replaceChildren();
   const allTags = [...new Set([...FUND_TAG_ORDER, ...counts.keys()])];
@@ -115,9 +164,9 @@ function renderFundStrip() {
       const button = document.createElement("button");
       button.type = "button";
       button.innerHTML = `<span>${tag}</span><strong>${counts.get(tag) || 0}</strong>`;
-      button.className = $("#fund-tag").value === tag ? "active" : "";
+      button.className = state.activeButton === tag ? "active" : "";
       button.addEventListener("click", () => {
-        $("#fund-tag").value = $("#fund-tag").value === tag ? "" : tag;
+        state.activeButton = state.activeButton === tag ? "" : tag;
         render();
       });
       strip.append(button);
@@ -139,6 +188,7 @@ function renderCard(item, index) {
   template.querySelector(".agency").textContent = valueOrBlank(item.agency);
   template.querySelector(".planned-time").textContent = valueOrBlank(item.planned_bid_time);
   template.querySelector(".budget").textContent = valueOrBlank(item.budget);
+  template.querySelector(".planned-content").textContent = `拟招标内容：${valueOrBlank(item.planned_tender_content)}`;
   template.querySelector(".fund-source").textContent = valueOrBlank(item.fund_source);
   template.querySelector(".location").textContent = valueOrBlank(item.project_location || item.region);
   template.querySelector(".content").textContent = valueOrBlank(item.project_content);
@@ -148,11 +198,6 @@ function renderCard(item, index) {
     chip.textContent = tag;
     tags.append(chip);
   });
-  if (item.planned_tender_content) {
-    const chip = document.createElement("span");
-    chip.textContent = item.planned_tender_content;
-    tags.append(chip);
-  }
   const open = template.querySelector(".open-link");
   open.href = item.url;
   article.style.animationDelay = `${Math.min(index * 24, 260)}ms`;
@@ -185,14 +230,21 @@ async function load() {
   }
 }
 
-["search", "region", "date-range", "source", "planned-month", "fund-tag"].forEach((id) => {
+["search", "district", "date-range", "source", "planned-month"].forEach((id) => {
   const element = $(`#${id}`);
   element.addEventListener(element.tagName === "INPUT" ? "input" : "change", render);
 });
 
+$("#prefecture").addEventListener("change", () => {
+  updateDistrictOptions();
+  render();
+});
+
 $("#reset").addEventListener("click", () => {
-  ["search", "region", "source", "planned-month", "fund-tag"].forEach((id) => { $(`#${id}`).value = ""; });
+  ["search", "prefecture", "district", "source", "planned-month"].forEach((id) => { $(`#${id}`).value = ""; });
   $("#date-range").value = "all";
+  state.activeButton = "";
+  updateDistrictOptions();
   render();
 });
 
