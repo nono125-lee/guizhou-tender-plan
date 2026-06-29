@@ -336,6 +336,70 @@ dd {
   font-size: 12px;
 }
 
+.version-history {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.version-history summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 13px 0;
+  color: var(--blue);
+  cursor: pointer;
+  font-weight: 700;
+  list-style: none;
+}
+
+.version-history summary::-webkit-details-marker { display: none; }
+
+.version-history summary::after {
+  content: "+";
+  margin-left: auto;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 400;
+}
+
+.version-history[open] summary::after { content: "−"; }
+
+.version-history summary strong {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.history-list {
+  margin: 0 0 4px;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.history-list li {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.7fr) minmax(0, 1.3fr);
+  gap: 18px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.history-list a {
+  color: var(--red);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.history-list a:hover { text-decoration: underline; }
+
+.history-list span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .open-link {
   align-self: start;
   justify-self: end;
@@ -375,4 +439,5 @@ dd {
   .stats div:last-child { border-bottom: 0; }
   .plan-card { grid-template-columns: 1fr; gap: 12px; }
   .open-link { grid-column: 1; }
+  .history-list li { grid-template-columns: 1fr; gap: 6px; }
 }
