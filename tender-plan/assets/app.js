@@ -24,7 +24,7 @@ const PREFECTURE_LABELS = {
   "黔南布依族苗族自治州": "黔南",
   "贵安新区": "贵安"
 };
-const state = { items: [], payload: null, activeButton: "" };
+const state = { items: [], projects: [], payload: null, activeButton: "" };
 const $ = (selector) => document.querySelector(selector);
 
 function valueOrBlank(value) {
@@ -35,6 +35,38 @@ function parseDate(value) {
   const text = (value || "").slice(0, 10);
   const date = new Date(`${text}T00:00:00+08:00`);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function projectName(item) {
+  return String(item.project_name || item.title || "")
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function groupProjects(items) {
+  const groups = new Map();
+  items.forEach((item) => {
+    const name = projectName(item);
+    const key = name || `notice:${item.source_notice_id || item.url}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  });
+
+  return [...groups.entries()]
+    .map(([key, versions]) => {
+      versions.sort((a, b) => {
+        const dateOrder = (b.published_at || "").localeCompare(a.published_at || "");
+        if (dateOrder) return dateOrder;
+        return (b.source_notice_id || "").localeCompare(a.source_notice_id || "");
+      });
+      return { key, latest: versions[0], history: versions.slice(1), versions };
+    })
+    .sort((a, b) => {
+      const dateOrder = (b.latest.published_at || "").localeCompare(a.latest.published_at || "");
+      if (dateOrder) return dateOrder;
+      return a.key.localeCompare(b.key, "zh-CN");
+    });
 }
 
 function daysAgo(days) {
@@ -90,11 +122,16 @@ function updateDistrictOptions() {
   optionList($("#district"), [...new Set(values)]);
 }
 
-function updateStats(payload) {
+function updateStats(payload, projects) {
   const stats = payload.stats || {};
   $("#stat-total").textContent = stats.total || 0;
   $("#stat-source").textContent = stats.source_total || 0;
-  $("#stat-new").textContent = stats.new_today || 0;
+  const rawNewToday = state.items.filter((item) => item.is_new).length;
+  const uniqueNewToday = projects.filter((project) => project.versions.some((item) => item.is_new)).length;
+  $("#stat-new").textContent = uniqueNewToday;
+  $("#stat-new").parentElement.title = rawNewToday === uniqueNewToday
+    ? `今日原始公告 ${rawNewToday} 条`
+    : `今日原始公告 ${rawNewToday} 条，按同名项目去重后 ${uniqueNewToday} 个`;
   $("#stat-regions").textContent = stats.regions || 0;
   $("#source-link").href = payload.source_url || $("#source-link").href;
   const updated = payload.updated_at ? new Date(payload.updated_at) : null;
@@ -141,10 +178,11 @@ function passFilters(item) {
 
 function renderFundStrip() {
   const counts = new Map();
-  state.items.forEach((item) => {
+  const latestItems = state.projects.map((project) => project.latest);
+  latestItems.forEach((item) => {
     (item.fund_source_tags || ["未载明"]).forEach((tag) => counts.set(tag, (counts.get(tag) || 0) + 1));
   });
-  counts.set("超长期", state.items.filter(isUltraLongBond).length);
+  counts.set("超长期", latestItems.filter(isUltraLongBond).length);
   const strip = $("#fund-strip");
   strip.replaceChildren();
   const allTags = [...new Set([...FUND_TAG_ORDER, ...counts.keys()])];
@@ -168,7 +206,33 @@ function renderFundStrip() {
     });
 }
 
-function renderCard(item, index) {
+function renderHistory(template, history) {
+  if (!history.length) return;
+  const details = template.querySelector(".version-history");
+  const count = template.querySelector(".history-count");
+  const list = template.querySelector(".history-list");
+  details.hidden = false;
+  count.textContent = `${history.length} 条`;
+
+  history.forEach((item) => {
+    const row = document.createElement("li");
+    const link = document.createElement("a");
+    const meta = document.createElement("span");
+    link.href = item.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = `${valueOrBlank((item.published_at || "").slice(0, 10))} · 查看原公告`;
+    meta.textContent = [
+      `预计招标：${valueOrBlank(item.planned_bid_time)}`,
+      `投资估算：${valueOrBlank(item.budget)}`
+    ].join(" / ");
+    row.append(link, meta);
+    list.append(row);
+  });
+}
+
+function renderCard(project, index) {
+  const item = project.latest;
   const template = $("#plan-card").content.cloneNode(true);
   const article = template.querySelector(".plan-card");
   if (item.is_new) article.classList.add("is-new");
@@ -195,18 +259,19 @@ function renderCard(item, index) {
   });
   const open = template.querySelector(".open-link");
   open.href = item.url;
+  renderHistory(template, project.history);
   article.style.animationDelay = `${Math.min(index * 24, 260)}ms`;
   return template;
 }
 
 function render() {
-  const items = state.items.filter(passFilters);
+  const projects = state.projects.filter((project) => passFilters(project.latest));
   const list = $("#list");
   list.replaceChildren();
-  $("#result-count").textContent = items.length;
-  $("#empty").hidden = items.length > 0;
+  $("#result-count").textContent = projects.length;
+  $("#empty").hidden = projects.length > 0;
   renderFundStrip();
-  items.forEach((item, index) => list.append(renderCard(item, index)));
+  projects.forEach((project, index) => list.append(renderCard(project, index)));
 }
 
 async function load() {
@@ -216,8 +281,9 @@ async function load() {
     const payload = await response.json();
     state.payload = payload;
     state.items = payload.items || [];
-    updateStats(payload);
-    populateFilters(state.items);
+    state.projects = groupProjects(state.items);
+    updateStats(payload, state.projects);
+    populateFilters(state.projects.map((project) => project.latest));
     render();
   } catch (error) {
     $("#warning").hidden = false;

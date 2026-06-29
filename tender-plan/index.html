@@ -26,7 +26,7 @@
     <section class="stats" aria-label="数据概览">
       <div><strong id="stat-total">0</strong><span>已采集</span></div>
       <div><strong id="stat-source">0</strong><span>源站总量</span></div>
-      <div><strong id="stat-new">0</strong><span>今日新增</span></div>
+      <div><strong id="stat-new">0</strong><span>今日新增（去重）</span></div>
       <div><strong id="stat-regions">0</strong><span>覆盖区域</span></div>
     </section>
   </header>
@@ -69,7 +69,7 @@
     <section class="toolbar">
       <div>
         <strong id="result-count">0</strong>
-        <span>条符合条件</span>
+        <span>个项目符合条件</span>
       </div>
       <button id="reset" type="button">重置筛选</button>
     </section>
@@ -100,6 +100,10 @@
         </dl>
         <p class="content"></p>
         <div class="tag-row"></div>
+        <details class="version-history" hidden>
+          <summary>历史版本 <strong class="history-count"></strong></summary>
+          <ol class="history-list"></ol>
+        </details>
       </div>
       <a class="open-link" target="_blank" rel="noopener noreferrer">查看公告</a>
     </article>
