@@ -1,22 +1,15 @@
-# 贵州招标计划查询
+# 贵州超长期招标计划（兼容仓库）
 
-本项目生成贵州省公共资源交易云工程建设 `AP1` 招标计划静态查看页。
+超长期招标计划、施工标讯粗筛和采购公告关联能力已合并到
+[`guizhou-tender-daily`](https://github.com/nono125-lee/guizhou-tender-daily) 仓库。
+本仓库不再作为 Skill 或采集任务的维护源，只保留旧网址和历史页面兼容。
 
-本地更新：
+统一入口：
 
-```bash
-python3 ~/.codex/skills/tender-plan-intelligence/scripts/collect_plan.py \
-  --site-dir /Users/nonolee/Documents/超长期标讯/site/tender-plan \
-  --pub-date l3m
-```
+- 页面：<https://nono125-lee.github.io/guizhou-tender-daily/opportunities/>
+- 仓库：<https://github.com/nono125-lee/guizhou-tender-daily>
+- 本机项目：`/Users/nonolee/Documents/标讯`
+- 日常命令：`PYTHONPATH=src python3 -m tender_agent.unified_site update --publish`
 
-页面入口：
-
-- 本地：`site/tender-plan/index.html`
-- GitHub Pages：发布 `site/` 目录后访问站点根目录或 `/tender-plan/`
-
-展示口径：
-
-- `latest.json` 保留公告级原始记录及每条公告链接。
-- 页面按标准化后的项目名称分组，默认只展示发布时间最新的版本；其余公告可从卡片内的“历史版本”展开查看。
-- “今日新增”、筛选结果数和资金来源分布按去重后的项目口径展示。
+旧详细页仍可访问，但页面中的数据不再由本仓库单独采集。后续修改资金来源识别、
+关联规则、统一页面或内部招标计划 Skill，均在 `guizhou-tender-daily` 仓库完成。
