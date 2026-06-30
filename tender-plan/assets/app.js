@@ -24,7 +24,7 @@ const PREFECTURE_LABELS = {
   "黔南布依族苗族自治州": "黔南",
   "贵安新区": "贵安"
 };
-const state = { items: [], projects: [], payload: null, activeButton: "" };
+const state = { items: [], projects: [], priorityNotices: [], payload: null, activeButton: "" };
 const $ = (selector) => document.querySelector(selector);
 
 function valueOrBlank(value) {
@@ -67,6 +67,29 @@ function groupProjects(items) {
       if (dateOrder) return dateOrder;
       return a.key.localeCompare(b.key, "zh-CN");
     });
+}
+
+function attachPriorityNotices(projects, priorityNotices) {
+  const byPlanNoticeId = new Map();
+  priorityNotices.forEach((entry) => {
+    const candidates = entry.candidate_plans?.length
+      ? entry.candidate_plans
+      : [{ plan: entry.plan }];
+    candidates.forEach((candidate) => {
+      const id = String(candidate.plan?.source_notice_id || "");
+      if (!id) return;
+      if (!byPlanNoticeId.has(id)) byPlanNoticeId.set(id, []);
+      if (!byPlanNoticeId.get(id).includes(entry)) byPlanNoticeId.get(id).push(entry);
+    });
+  });
+  projects.forEach((project) => {
+    const linked = [];
+    project.versions.forEach((version) => {
+      linked.push(...(byPlanNoticeId.get(String(version.source_notice_id || "")) || []));
+    });
+    project.priorityNotices = linked;
+  });
+  return projects;
 }
 
 function daysAgo(days) {
@@ -133,6 +156,7 @@ function updateStats(payload, projects) {
     ? `今日原始公告 ${rawNewToday} 条`
     : `今日原始公告 ${rawNewToday} 条，按同名项目去重后 ${uniqueNewToday} 个`;
   $("#stat-regions").textContent = stats.regions || 0;
+  $("#stat-priority").textContent = stats.priority_projects || 0;
   $("#source-link").href = payload.source_url || $("#source-link").href;
   const updated = payload.updated_at ? new Date(payload.updated_at) : null;
   $("#updated-at").textContent = updated
@@ -142,6 +166,68 @@ function updateStats(payload, projects) {
     $("#warning").hidden = false;
     $("#warning").textContent = payload.warnings.slice(0, 6).join("；");
   }
+}
+
+function renderPrioritySection() {
+  const section = $("#priority-section");
+  const list = $("#priority-list");
+  list.replaceChildren();
+  section.hidden = state.priorityNotices.length === 0;
+  $("#priority-count").textContent = state.priorityNotices.length;
+  if (!state.priorityNotices.length) return;
+
+  state.priorityNotices.forEach((entry, index) => {
+    const plan = entry.plan || {};
+    const notice = entry.notice || {};
+    const match = entry.match || {};
+    const candidates = entry.candidate_plans?.length
+      ? entry.candidate_plans
+      : [{ plan, match }];
+    const template = $("#priority-card").content.cloneNode(true);
+    const article = template.querySelector(".priority-card");
+    if (notice.is_new) article.classList.add("is-new");
+    if (match.review_required) article.classList.add("needs-review");
+    template.querySelector("time").textContent = valueOrBlank((notice.published_at || "").slice(0, 10));
+    template.querySelector(".priority-source").textContent = valueOrBlank(notice.source_name);
+    template.querySelector(".priority-confidence").textContent = match.review_required
+      ? `候选需复核 · ${Math.round((match.confidence || 0) * 100)}%`
+      : `高可信 · ${Math.round((match.confidence || 0) * 100)}%`;
+    const title = template.querySelector(".priority-notice-link");
+    title.href = notice.url;
+    title.textContent = notice.project_name || notice.title;
+    template.querySelector(".priority-plan-name").textContent = candidates.length > 1
+      ? `可能关联 ${candidates.length} 个超长期计划；首要候选：${plan.project_name || plan.title || "未载明"}`
+      : `关联超长期计划：${plan.project_name || plan.title || "未载明"}`;
+    template.querySelector(".priority-review-note").textContent = valueOrBlank(match.review_note);
+    template.querySelector(".priority-buyer").textContent = valueOrBlank(notice.buyer);
+    template.querySelector(".priority-code").textContent = valueOrBlank(notice.project_code);
+    template.querySelector(".priority-keywords").textContent = valueOrBlank((notice.matched_keywords || []).join("、"));
+    template.querySelector(".priority-evidence").textContent = valueOrBlank((match.evidence || []).join("；"));
+    if (candidates.length > 1) {
+      const details = template.querySelector(".priority-candidates");
+      const candidateList = template.querySelector(".priority-candidate-list");
+      details.hidden = false;
+      template.querySelector(".priority-candidate-count").textContent = `${candidates.length} 个`;
+      candidates.forEach((candidate) => {
+        const item = document.createElement("li");
+        const link = document.createElement("a");
+        const description = document.createElement("span");
+        link.href = candidate.plan?.url || "#";
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = candidate.plan?.project_name || candidate.plan?.title || "未载明";
+        description.textContent = (candidate.match?.evidence || []).join("；");
+        item.append(link, description);
+        candidateList.append(item);
+      });
+    }
+    const noticeButton = template.querySelector(".priority-notice-button");
+    noticeButton.href = notice.url;
+    const planLink = template.querySelector(".priority-plan-link");
+    planLink.href = plan.url;
+    article.style.animationDelay = `${Math.min(index * 40, 240)}ms`;
+    list.append(template);
+  });
 }
 
 function passFilters(item) {
@@ -236,6 +322,7 @@ function renderCard(project, index) {
   const template = $("#plan-card").content.cloneNode(true);
   const article = template.querySelector(".plan-card");
   if (item.is_new) article.classList.add("is-new");
+  if (project.priorityNotices?.length) article.classList.add("has-priority-notice");
   template.querySelector(".card-no").textContent = String(index + 1).padStart(2, "0");
   template.querySelector("time").textContent = valueOrBlank((item.published_at || "").slice(0, 10));
   template.querySelector(".region").textContent = valueOrBlank(item.region);
@@ -257,6 +344,18 @@ function renderCard(project, index) {
     chip.textContent = tag;
     tags.append(chip);
   });
+  if (project.priorityNotices?.length) {
+    const chip = document.createElement("a");
+    chip.className = "priority-chip";
+    chip.href = project.priorityNotices[0].notice?.url || item.url;
+    chip.target = "_blank";
+    chip.rel = "noopener noreferrer";
+    const allNeedReview = project.priorityNotices.every((entry) => entry.match?.review_required);
+    chip.textContent = allNeedReview
+      ? `施工公告候选 ${project.priorityNotices.length} 条`
+      : `已出施工公告 ${project.priorityNotices.length} 条`;
+    tags.prepend(chip);
+  }
   const open = template.querySelector(".open-link");
   open.href = item.url;
   renderHistory(template, project.history);
@@ -265,7 +364,13 @@ function renderCard(project, index) {
 }
 
 function render() {
-  const projects = state.projects.filter((project) => passFilters(project.latest));
+  const projects = state.projects
+    .filter((project) => passFilters(project.latest))
+    .sort((a, b) => {
+      const priorityOrder = Number(Boolean(b.priorityNotices?.length)) - Number(Boolean(a.priorityNotices?.length));
+      if (priorityOrder) return priorityOrder;
+      return (b.latest.published_at || "").localeCompare(a.latest.published_at || "");
+    });
   const list = $("#list");
   list.replaceChildren();
   $("#result-count").textContent = projects.length;
@@ -281,9 +386,11 @@ async function load() {
     const payload = await response.json();
     state.payload = payload;
     state.items = payload.items || [];
-    state.projects = groupProjects(state.items);
+    state.priorityNotices = payload.priority_notices || [];
+    state.projects = attachPriorityNotices(groupProjects(state.items), state.priorityNotices);
     updateStats(payload, state.projects);
     populateFilters(state.projects.map((project) => project.latest));
+    renderPrioritySection();
     render();
   } catch (error) {
     $("#warning").hidden = false;
